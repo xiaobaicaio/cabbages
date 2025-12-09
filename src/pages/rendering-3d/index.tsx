@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
@@ -20,6 +23,8 @@ function Rendering3D() {
   const managerRef = useRef<THREE.LoadingManager | null>(null)
   const assetMapRef = useRef<Record<string, string>>({})
   const filesHandlerRef = useRef<((files: FileList | null) => void) | null>(null)
+  const ktx2Ref = useRef<KTX2Loader | null>(null)
+  const dracoRef = useRef<DRACOLoader | null>(null)
   const [exposure, setExposure] = useState(1)
   const [bgColor, setBgColor] = useState('#202020')
   const [showGrid, setShowGrid] = useState(true)
@@ -29,6 +34,8 @@ function Rendering3D() {
   const [useEnv, setUseEnv] = useState(true)
   const [autoCenter, setAutoCenter] = useState(true)
   const [autoNormalize, setAutoNormalize] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(true)
   const gridRef = useRef<THREE.GridHelper | null>(null)
   const groundRef = useRef<THREE.Mesh | null>(null)
   const axesRef = useRef<THREE.AxesHelper | null>(null)
@@ -40,20 +47,35 @@ function Rendering3D() {
   const [mtlUrl, setMtlUrl] = useState('')
   const localObj1Url = new URL('./obj-field/无标题_副本.obj', import.meta.url).href
   const localObj2Url = new URL('./obj-field/富阳傅宅原始地形(2)_副本.obj', import.meta.url).href
+  const localObj3Url = new URL('./obj-field/富阳傅宅体块推敲_副本.obj', import.meta.url).href
+  const localObj4Url = new URL('./obj-field/5f206b07041d4a6c96fd6f4879b8aa98.glb', import.meta.url).href
+
+
+  useEffect(() => {
+    const cw = mountRef.current?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1024)
+    const mobile = cw < 768
+    setIsMobile(mobile)
+    setPanelOpen(!mobile)
+  }, [])
 
   useEffect(() => {
     const container = mountRef.current
     if (!container) return
+    const vv = (typeof window !== 'undefined' && (window as any).visualViewport) ? (window as any).visualViewport : null
     const w = container.clientWidth || window.innerWidth
-    const h = container.clientHeight || window.innerHeight
+    const h = container.clientHeight || (vv ? Math.floor(vv.height) : window.innerHeight)
     const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true })
-    renderer.setPixelRatio(window.devicePixelRatio)
+    renderer.setPixelRatio(window.devicePixelRatio || 1)
     renderer.setSize(w, h)
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = exposure
     renderer.shadowMap.enabled = true
     container.appendChild(renderer.domElement)
+    renderer.domElement.style.touchAction = 'none'
+    renderer.domElement.style.display = 'block'
+    renderer.domElement.style.width = '100%'
+    renderer.domElement.style.height = '100%'
     rendererRef.current = renderer
 
     const scene = new THREE.Scene()
@@ -73,6 +95,16 @@ function Rendering3D() {
       return assetMapRef.current[key] || assetMapRef.current[base] || url
     })
     managerRef.current = manager
+
+    const ktx2 = new KTX2Loader(manager)
+    ktx2.setTranscoderPath('https://unpkg.com/three@0.181.2/examples/jsm/libs/basis/')
+    ktx2.detectSupport(renderer)
+    ktx2Ref.current = ktx2
+
+    const draco = new DRACOLoader(manager)
+    draco.setDecoderPath('https://unpkg.com/three@0.181.2/examples/jsm/libs/draco/')
+    draco.setDecoderConfig({ type: 'js' })
+    dracoRef.current = draco
 
     const camera = new THREE.PerspectiveCamera(60, w / h, 0.5, 1000)
     camera.position.set(3, 2, 6)
@@ -111,14 +143,14 @@ function Rendering3D() {
 
     const groundMat = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 1, metalness: 0 })
     groundMat.polygonOffset = true
-    groundMat.polygonOffsetFactor = 2
-    groundMat.polygonOffsetUnits = 2
+    groundMat.polygonOffsetFactor = 4
+    groundMat.polygonOffsetUnits = 4
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(100, 100),
       groundMat
     )
     ground.rotation.x = -Math.PI / 2
-    ground.position.y = -0.01
+    ground.position.y = -0.1
     ground.receiveShadow = true
     ground.visible = showGround
     scene.add(ground)
@@ -146,31 +178,43 @@ function Rendering3D() {
     tick()
 
     const handleResize = () => {
+      const vvLocal = (typeof window !== 'undefined' && (window as any).visualViewport) ? (window as any).visualViewport : null
       const cw = mountRef.current?.clientWidth || window.innerWidth
-      const ch = mountRef.current?.clientHeight || window.innerHeight
+      const ch = mountRef.current?.clientHeight || (vvLocal ? Math.floor(vvLocal.height) : window.innerHeight)
+      renderer.setPixelRatio(window.devicePixelRatio || 1)
       renderer.setSize(cw, ch)
       camera.aspect = cw / ch
       camera.updateProjectionMatrix()
+      setIsMobile(cw < 768)
     }
     window.addEventListener('resize', handleResize)
+    window.addEventListener('orientationchange', handleResize)
+    if (vv) vv.addEventListener('resize', handleResize)
+    const ro = (window as any).ResizeObserver ? new (window as any).ResizeObserver(() => handleResize()) : null
+    if (ro) ro.observe(container)
     const onDragOver = (e: DragEvent) => { e.preventDefault() }
     const onDrop = (e: DragEvent) => {
       e.preventDefault()
       const fl = e.dataTransfer?.files || null
       filesHandlerRef.current?.(fl)
     }
-    container.addEventListener('dragover', onDragOver)
-    container.addEventListener('drop', onDrop)
+    container.addEventListener('dragover', onDragOver, { passive: false })
+    container.addEventListener('drop', onDrop, { passive: false })
 
     return () => {
       cancelAnimationFrame(anim)
       window.removeEventListener('resize', handleResize)
+      window.removeEventListener('orientationchange', handleResize)
+      if (vv) vv.removeEventListener('resize', handleResize)
+      if (ro) ro.disconnect()
       container.removeEventListener('dragover', onDragOver)
       container.removeEventListener('drop', onDrop)
       controls.dispose()
       renderer.dispose()
       container?.removeChild(renderer.domElement)
       pmremRef.current?.dispose()
+      ktx2Ref.current?.dispose()
+      dracoRef.current?.dispose()
     }
   }, [exposure, bgColor, showGrid, showGround, showAxes, useEnv])
 
@@ -280,6 +324,7 @@ function Rendering3D() {
           }
           if (autoCenter) alignToOrigin()
           if (autoNormalize) normalizeScale(2)
+          placeGroundBelowModel()
           fitView(root)
           setLoading(false)
         }, e => {
@@ -322,6 +367,7 @@ function Rendering3D() {
         }
         if (autoCenter) alignToOrigin()
         if (autoNormalize) normalizeScale(2)
+        placeGroundBelowModel()
         fitView(root)
         setLoading(false)
       }, e => {
@@ -345,6 +391,10 @@ function Rendering3D() {
     setProgress(0)
     clearModel()
     const loader = new GLTFLoader(managerRef.current || undefined)
+    loader.setCrossOrigin('anonymous')
+    if (ktx2Ref.current) loader.setKTX2Loader(ktx2Ref.current)
+    if (dracoRef.current) loader.setDRACOLoader(dracoRef.current)
+    if (MeshoptDecoder) loader.setMeshoptDecoder(MeshoptDecoder as any)
     loader.load(u, gltf => {
       const scene = sceneRef.current
       if (!scene) return
@@ -368,13 +418,15 @@ function Rendering3D() {
       }
       if (autoCenter) alignToOrigin()
       if (autoNormalize) normalizeScale(2)
+      placeGroundBelowModel()
       fitView(root)
       setLoading(false)
     }, e => {
       const total = e.total || 100
       setProgress(Math.round((e.loaded / total) * 100))
     }, err => {
-      setError(String(err))
+      const msg = (err && (err as any).message) ? (err as any).message : String(err)
+      setError(msg)
       setLoading(false)
     })
   }
@@ -420,6 +472,17 @@ function Rendering3D() {
     const factor = targetRadius / r
     root.scale.multiplyScalar(factor)
     fitView(root)
+  }
+
+  const placeGroundBelowModel = () => {
+    const root = modelRef.current
+    const ground = groundRef.current
+    if (!root || !ground) return
+    const box = new THREE.Box3().setFromObject(root)
+    const size = new THREE.Vector3()
+    box.getSize(size)
+    const margin = Math.max(0.02, size.y * 0.02)
+    ground.position.y = box.min.y - margin
   }
 
   useEffect(() => {
@@ -488,17 +551,17 @@ function Rendering3D() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh' }}>
-      <div style={{ width: 320, padding: 16, boxSizing: 'border-box', background: '#1b1b1b', color: '#eee' }}>
-        <div style={{ fontSize: 18, marginBottom: 12 }}>Three.js 模型加载</div>
-        <div style={{ marginBottom: 8 }}>模型 URL</div>
-        <div style={{ display: 'flex', gap: 8 }}>
+    <div style={{ display: 'flex', height: '100dvh', flexDirection: isMobile ? 'column' : 'row', overflow: 'hidden' }}>
+      <div style={{ width: isMobile ? '100%' : 320, padding: 16, boxSizing: 'border-box', background: '#1b1b1b', color: '#eee', display: panelOpen ? 'block' : 'none' }}>
+        <div style={{ fontSize: 18, marginBottom: 12 }}>模型加载</div>
+        {/* <div style={{ marginBottom: 8 }}>模型 URL</div> */}
+        {/* <div style={{ display: 'flex', gap: 8 }}>
           <input style={{ flex: 1 }} value={url} onChange={e => setUrl(e.target.value)} placeholder="支持 .glb/.gltf/.obj" />
           <button onClick={() => loadFromUrl(url)} disabled={loading}>加载</button>
-        </div>
-        <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+        </div> */}
+        {/* <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
           <input style={{ flex: 1 }} value={mtlUrl} onChange={e => setMtlUrl(e.target.value)} placeholder="材质 URL(.mtl，可选)" />
-        </div>
+        </div> */}
         <div style={{ margin: '12px 0 8px' }}>或选择本地文件</div>
         <input type="file" accept=".glb,.gltf,.obj,.mtl,.zip" multiple onChange={e => onFilesChange(e.target.files)} />
         <div style={{ marginTop: 8 }}>
@@ -510,14 +573,16 @@ function Rendering3D() {
           {loading ? <div>加载中 {progress}%</div> : null}
           {error ? <div style={{ color: '#f88' }}>错误: {error}</div> : null}
         </div>
-        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+        <div style={{ marginTop: 12, display: 'flex flex-wrap', gap: 8 }}>
           <button onClick={centerView}>居中视图</button>
           <button onClick={alignToOrigin}>对齐到原点</button>
           <button onClick={() => loadFromUrl('https://modelviewer.dev/shared-assets/models/Astronaut.glb')}>加载示例模型</button>
-          <button onClick={() => loadFromObj(localObj1Url)} disabled={loading}>加载内置OBJ1</button>
-          <button onClick={() => loadFromObj(localObj2Url)} disabled={loading}>加载内置OBJ2</button>
           <button onClick={resetCamera}>重置相机</button>
           <button onClick={() => normalizeScale(2)}>规范尺度</button>
+          <button onClick={() => loadFromObj(localObj1Url)} disabled={loading}>加载内置OBJ1</button>
+          <button onClick={() => loadFromObj(localObj2Url)} disabled={loading}>加载内置OBJ2</button>
+          <button onClick={() => loadFromObj(localObj3Url)} disabled={loading}>加载内置OBJ3</button>
+          <button onClick={() => loadFromUrl(localObj4Url)} disabled={loading}>加载内置glb</button>
         </div>
         <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" checked={showGrid} onChange={e => setShowGrid(e.target.checked)} />网格</label>
@@ -531,7 +596,12 @@ function Rendering3D() {
         </div>
         <div style={{ marginTop: 12, fontSize: 12, color: '#aaa' }}>拖拽旋转，滚轮缩放</div>
       </div>
-      <div ref={mountRef} style={{ flex: 1 }} />
+      <div ref={mountRef} style={{ flex: 1, position: 'relative' }}>
+        <button
+          onClick={() => setPanelOpen(p => !p)}
+          style={{ position: 'absolute', top: 12, right: 12, zIndex: 10, padding: '8px 12px', borderRadius: 6, background: '#2b2b2b', color: '#eee', border: '1px solid #444' }}
+        >{panelOpen ? '隐藏菜单' : '显示菜单'}</button>
+      </div>
     </div>
   )
 }
