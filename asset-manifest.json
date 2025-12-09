@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/cabbages/static/css/main.964fdded.css",
-    "main.js": "/cabbages/static/js/main.ca60935f.js",
+    "main.js": "/cabbages/static/js/main.9719d04f.js",
     "static/js/453.10fdc890.chunk.js": "/cabbages/static/js/453.10fdc890.chunk.js",
     "static/media/glb": "/cabbages/static/media/5f206b07041d4a6c96fd6f4879b8aa98.90a26893cd3d0f01cf22.glb",
     "static/media/富阳傅宅体块推敲_副本.obj": "/cabbages/static/media/富阳傅宅体块推敲_副本.236670fd1e24ec7ea179.obj",
@@ -9,11 +9,11 @@
     "static/media/无标题_副本.obj": "/cabbages/static/media/无标题_副本.6d084ac19976bfde6f4c.obj",
     "index.html": "/cabbages/index.html",
     "main.964fdded.css.map": "/cabbages/static/css/main.964fdded.css.map",
-    "main.ca60935f.js.map": "/cabbages/static/js/main.ca60935f.js.map",
+    "main.9719d04f.js.map": "/cabbages/static/js/main.9719d04f.js.map",
     "453.10fdc890.chunk.js.map": "/cabbages/static/js/453.10fdc890.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.964fdded.css",
-    "static/js/main.ca60935f.js"
+    "static/js/main.9719d04f.js"
   ]
 }
